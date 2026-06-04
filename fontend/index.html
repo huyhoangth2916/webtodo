@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ứng dụng Quản lý Việc cần làm</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #f4f6f9; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
+        .container { background: #fff; width: 100%; max-width: 450px; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+        h2 { margin-bottom: 20px; color: #333; text-align: center; font-size: 24px; }
+        .form-group { margin-bottom: 15px; }
+        input[type="text"], input[type="password"] { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; outline: none; font-size: 16px; transition: 0.3s; }
+        input:focus { border-color: #007bff; }
+        button { width: 100%; padding: 12px; background: #007bff; border: none; color: white; font-size: 16px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        button:hover { background: #0056b3; }
+        .switch-mode { text-align: center; margin-top: 15px; color: #007bff; cursor: pointer; font-size: 14px; }
+        .hidden { display: none; }
+        
+        /* App Styles */
+        .header-app { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #eee; }
+        .header-app h3 { color: #333; font-size: 18px; }
+        .btn-logout { width: auto; padding: 6px 12px; background: #dc3545; font-size: 14px; }
+        .btn-logout:hover { background: #c82333; }
+        .todo-input-group { display: flex; gap: 10px; margin-bottom: 20px; }
+        .todo-input-group button { width: 80px; }
+        
+        .todo-list { list-style: none; }
+        .todo-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f8f9fa; margin-bottom: 10px; border-radius: 8px; border-left: 4px solid #007bff; transition: 0.3s; }
+        .todo-item.completed { border-left-color: #28a745; background: #e8f5e9; }
+        .todo-item span { flex: 1; cursor: pointer; font-size: 16px; margin-right: 10px; word-break: break-all; }
+        .todo-item.completed span { text-decoration: line-through; color: #6c757d; }
+        .btn-delete { background: none; color: #dc3545; width: auto; padding: 5px 10px; font-size: 14px; }
+        .btn-delete:hover { background: #fde8e8; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div id="auth-box">
+            <h2 id="auth-title">Đăng Nhập</h2>
+            <div class="form-group">
+                <input type="text" id="username" placeholder="Tên đăng nhập">
+            </div>
+            <div class="form-group">
+                <input type="password" id="password" placeholder="Mật khẩu">
+            </div>
+            <button onclick="handleAuth()" id="btn-auth">Đăng Nhập</button>
+            <div class="switch-mode" id="switch-text" onclick="toggleAuthMode()">Chưa có tài khoản? Đăng ký ngay</div>
+        </div>
+
+        <div id="app-box" class="hidden">
+            <div class="header-app">
+                <h3>Xin chào, <span id="user-display" style="color: #007bff;"></span>!</h3>
+                <button class="btn-logout" onclick="logout()">Đăng xuất</button>
+            </div>
+            
+            <div class="todo-input-group">
+                <input type="text" id="todo-input" placeholder="Thêm việc cần làm mới...">
+                <button onclick="addTodo()">Thêm</button>
+            </div>
+
+            <ul id="todo-list" class="todo-list">
+                </ul>
+        </div>
+    </div>
+
+    <script>
+        // CẤU HÌNH URL API: Hiện tại chạy dưới local, khi đưa lên Render sẽ thay đổi chuỗi này
+        const API_URL = 'http://localhost:5000/api'; 
+        
+        let isLoginMode = true;
+        let token = localStorage.getItem('token');
+
+        // Chuyển đổi qua lại giữa Đăng nhập & Đăng ký
+        function toggleAuthMode() {
+            isLoginMode = !isLoginMode;
+            document.getElementById('auth-title').innerText = isLoginMode ? 'Đăng Nhập' : 'Đăng Ký Tài Khoản';
+            document.getElementById('btn-auth').innerText = isLoginMode ? 'Đăng Nhập' : 'Đăng Ký';
+            document.getElementById('switch-text').innerText = isLoginMode ? 'Chưa có tài khoản? Đăng ký ngay' : 'Đã có tài khoản? Đăng nhập';
+        }
+
+        // Xử lý logic Đăng ký / Đăng nhập
+        async function handleAuth() {
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+            
+            if (!username || !password) return alert('Vui lòng điền đầy đủ thông tin!');
+            
+            const endpoint = isLoginMode ? '/login' : '/register';
+
+            try {
+                const res = await fetch(API_URL + endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+
+                if (!res.ok) return alert(data.error || 'Có lỗi xảy ra!');
+
+                if (isLoginMode) {
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('username', data.username);
+                    checkAuth();
+                } else {
+                    alert('Đăng ký tài khoản thành công! Hệ thống tự động chuyển sang trang đăng nhập.');
+                    toggleAuthMode();
+                }
+            } catch (err) {
+                alert('Không thể kết nối đến Server Backend!');
+            }
+        }
+
+        // Kiểm tra trạng thái đăng nhập khi tải trang
+        function checkAuth() {
+            token = localStorage.getItem('token');
+            if (token) {
+                document.getElementById('auth-box').classList.add('hidden');
+                document.getElementById('app-box').classList.remove('hidden');
+                document.getElementById('user-display').innerText = localStorage.getItem('username');
+                getTodos();
+            } else {
+                document.getElementById('auth-box').classList.remove('hidden');
+                document.getElementById('app-box').classList.add('hidden');
+            }
+        }
+
+        // Đăng xuất khỏi hệ thống
+        function logout() {
+            localStorage.clear();
+            checkAuth();
+        }
+
+        // --- CÁC HÀM CRUD (THAO TÁC DỮ LIỆU) ---
+
+        // Lấy danh sách việc cần làm từ Supabase (qua API)
+        async function getTodos() {
+            try {
+                const res = await fetch(`${API_URL}/todos`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const todos = await res.json();
+                const list = document.getElementById('todo-list');
+                list.innerHTML = '';
+                
+                if(todos.length === 0) {
+                    list.innerHTML = '<p style="text-align:center; color:#888; font-size:14px;">Chưa có công việc nào cần làm!</p>';
+                    return;
+                }
+
+                todos.forEach(todo => {
+                    list.innerHTML += `
+                        <li class="todo-item ${todo.is_completed ? 'completed' : ''}">
+                            <span onclick="toggleTodoStatus(${todo.id}, ${todo.is_completed}, '${todo.title}')">${todo.title}</span>
+                            <button class="btn-delete" onclick="deleteTodo(${todo.id})">Xóa</button>
+                        </li>`;
+                });
+            } catch (err) {
+                console.error('Lỗi lấy danh sách công việc:', err);
+            }
+        }
+
+        // Thêm một công việc mới
+        async function addTodo() {
+            const input = document.getElementById('todo-input');
+            const title = input.value.trim();
+            if (!title) return alert('Nội dung công việc trống!');
+
+            try {
+                const res = await fetch(`${API_URL}/todos`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ title })
+                });
+                if (res.ok) {
+                    input.value = '';
+                    getTodos();
+                }
+            } catch (err) {
+                alert('Lỗi khi thêm công việc!');
+            }
+        }
+
+        // Đánh dấu hoàn thành hoặc chưa hoàn thành (Sửa trạng thái)
+        async function toggleTodoStatus(id, currentStatus, title) {
+            try {
+                await fetch(`${API_URL}/todos/${id}`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ title, is_completed: !currentStatus })
+                });
+                getTodos();
+            } catch (err) {
+                alert('Lỗi cập nhật trạng thái công việc!');
+            }
+        }
+
+        // Xóa hẳn một công việc khỏi Database
+        async function deleteTodo(id) {
+            if (!confirm('Bạn có chắc chắn muốn xóa việc này?')) return;
+            try {
+                await fetch(`${API_URL}/todos/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                getTodos();
+            } catch (err) {
+                alert('Lỗi khi xóa công việc!');
+            }
+        }
+
+        // Khởi chạy kiểm tra khi vừa tải trang xong
+        checkAuth();
+    </script>
+</body>
+</html>
